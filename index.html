@@ -4,14 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#0b1c2d" />
-  <title>BTX Agenda TDAH v3</title>
+  <title>BTX Flow • Sistema TDAH</title>
 
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="styles.css" />
 
-  <link rel="icon" href="icons/icon-192.png" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png" />
-
+  <!-- jsPDF -->
   <script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
   <script defer src="db.js"></script>
@@ -22,9 +20,9 @@
 <body>
   <header class="topbar">
     <div class="brand">
-      <img class="appIcon" src="icons/icon-192.png" alt="BTX" />
+      <div class="logo">BTX</div>
       <div>
-        <div class="appTitle">BTX Agenda TDAH</div>
+        <div class="appTitle">Flow TDAH</div>
         <div class="appSub" id="appSub">Agora & Próximo</div>
       </div>
     </div>
@@ -40,28 +38,28 @@
   <nav class="tabs">
     <button class="tab active" data-view="today">Hoje</button>
     <button class="tab" data-view="people">Pessoas</button>
-    <button class="tab" data-view="cash">Caixa</button>
-    <button class="tab" data-view="docs">Docs</button>
+    <button class="tab" data-view="cash">Dinheiro</button>
+    <button class="tab" data-view="docs">Arquivos</button>
   </nav>
 
   <main class="main">
     <!-- HOJE -->
     <section class="view active" id="view-today">
       <div class="daybar">
-        <button class="chip" id="prevDay">◀</button>
+        <button class="chip" id="prevDay" title="Dia anterior">◀</button>
         <div class="dayTitle">
           <div class="big" id="dayLabel">Hoje</div>
           <div class="muted" id="dayDate"></div>
         </div>
-        <button class="chip" id="nextDay">▶</button>
+        <button class="chip" id="nextDay" title="Próximo dia">▶</button>
       </div>
 
-      <!-- NOVO: DIA VÁLIDO -->
+      <!-- DIA VÁLIDO -->
       <div class="statusBar" id="statusBar" style="display:none;">
         <div class="statusOk" id="statusText">✅ Dia válido. O resto é bônus.</div>
       </div>
 
-      <!-- NOVO: MODO FOCO -->
+      <!-- MODO FOCO -->
       <div class="row gap wrap" style="margin: 8px 0 12px;">
         <button class="btn small" id="btnFocus">🎯 Foco 25</button>
         <button class="btn small ghost" id="btnUnfocus" style="display:none;">Sair do foco</button>
@@ -100,6 +98,7 @@
               <div class="cardTitle">FUNÇÃO PRINCIPAL</div>
               <div class="muted">a ação nº 1 do seu dia • o que realmente importa</div>
             </div>
+            <!-- Mantém data-add="money" por compatibilidade com a lógica -->
             <button class="btn small green" data-add="money">+ adicionar</button>
           </div>
           <div class="list" id="list-money"></div>
@@ -138,7 +137,7 @@
         <div class="cardHead">
           <div>
             <div class="cardTitle">Pessoas</div>
-            <div class="muted">memória longitudinal: histórico + caixa + docs</div>
+            <div class="muted">memória longitudinal: histórico + dinheiro + arquivos</div>
           </div>
           <button class="btn small" id="btnAddPerson">+ pessoa</button>
         </div>
@@ -162,7 +161,7 @@
             <button class="btn small" id="btnPersonAddNote">+ nota</button>
             <button class="btn small green" id="btnPersonAddIn">+ entrada</button>
             <button class="btn small red" id="btnPersonAddOut">+ saída</button>
-            <button class="btn small" id="btnPersonAttach">+ doc</button>
+            <button class="btn small" id="btnPersonAttach">+ arquivo</button>
             <button class="btn ghost small" id="btnPersonPDF">PDF</button>
           </div>
         </div>
@@ -171,15 +170,15 @@
       </section>
     </section>
 
-    <!-- CAIXA -->
+    <!-- DINHEIRO -->
     <section class="view" id="view-cash">
       <section class="card">
         <div class="cardHead">
           <div>
-            <div class="cardTitle">Fluxo de Caixa</div>
+            <div class="cardTitle">Dinheiro</div>
             <div class="muted">entrada/saída • filtro por período • PDF</div>
           </div>
-          <button class="btn ghost small" id="btnCashPDF">PDF do caixa</button>
+          <button class="btn ghost small" id="btnCashPDF">PDF do dinheiro</button>
         </div>
 
         <div class="kpis">
@@ -213,19 +212,19 @@
       </section>
     </section>
 
-    <!-- DOCS -->
+    <!-- ARQUIVOS -->
     <section class="view" id="view-docs">
       <section class="card">
         <div class="cardHead">
           <div>
-            <div class="cardTitle">Documentos</div>
+            <div class="cardTitle">Arquivos</div>
             <div class="muted">salvos offline • baixar quando quiser</div>
           </div>
-          <button class="btn small" id="btnAddDoc">+ documento</button>
+          <button class="btn small" id="btnAddDoc">+ arquivo</button>
         </div>
 
         <div class="row gap">
-          <input class="input" id="docsSearch" placeholder="Buscar documento..." />
+          <input class="input" id="docsSearch" placeholder="Buscar arquivo..." />
           <button class="btn ghost small" id="btnClearDocsSearch">Limpar</button>
         </div>
 
@@ -252,7 +251,7 @@
         <button class="quickBtn" data-quick="appt">🗓️ Compromisso</button>
         <button class="quickBtn" data-quick="in">➕ Entrada</button>
         <button class="quickBtn" data-quick="out">➖ Saída</button>
-        <button class="quickBtn" data-quick="doc">📎 Documento</button>
+        <button class="quickBtn" data-quick="doc">📎 Arquivo</button>
         <button class="quickBtn" data-quick="person">👤 Pessoa</button>
       </div>
     </div>
@@ -273,7 +272,7 @@
         <div class="row gap wrap">
           <label class="field">
             <span>Texto</span>
-            <input class="input" id="fText" placeholder="Ex.: Resolver pendência X (5 min)" />
+            <input class="input" id="fText" placeholder="Ex.: Resolver X (5 min)" />
           </label>
           <label class="field" id="fTimeWrap" style="display:none;">
             <span>Hora</span>
@@ -347,6 +346,7 @@
         <label class="btn ghost" for="backupFile" style="cursor:pointer;">Importar backup</label>
         <input id="backupFile" type="file" accept="application/json" style="display:none;" />
       </div>
+
       <div class="muted smallText">
         Dica: salve seu backup na nuvem (Drive/WhatsApp/e-mail) pra trocar de aparelho sem perder nada.
       </div>
