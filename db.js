@@ -1,195 +1,290 @@
-const DB_NAME = "btx_agenda_tdah_v3";
-const DB_VERSION = 1;
-
-function uid(){
-  return (crypto?.randomUUID?.() || ("id-"+Math.random().toString(16).slice(2)+"-"+Date.now()));
-}
-function nowISO(){ return new Date().toISOString(); }
-function ymd(d){
-  const x = (d instanceof Date) ? d : new Date(d);
-  const yyyy = x.getFullYear();
-  const mm = String(x.getMonth()+1).padStart(2,'0');
-  const dd = String(x.getDate()).padStart(2,'0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-let _dbPromise = null;
-
-function openDB(){
-  if (_dbPromise) return _dbPromise;
-  _dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-
-      const meta = db.createObjectStore("meta", { keyPath: "key" });
-
-      const tasks = db.createObjectStore("tasks", { keyPath: "id" });
-      tasks.createIndex("by_date", "date", { unique:false });
-      tasks.createIndex("by_bucket_date", ["bucket","date"], { unique:false });
-      tasks.createIndex("by_person", "personId", { unique:false });
-
-      const appts = db.createObjectStore("appts", { keyPath: "id" });
-      appts.createIndex("by_date", "date", { unique:false });
-      appts.createIndex("by_person", "personId", { unique:false });
-
-      const people = db.createObjectStore("people", { keyPath: "id" });
-      people.createIndex("by_name", "name", { unique:false });
-
-      const cash = db.createObjectStore("cash", { keyPath: "id" });
-      cash.createIndex("by_date", "date", { unique:false });
-      cash.createIndex("by_person", "personId", { unique:false });
-
-      const docs = db.createObjectStore("docs", { keyPath: "id" });
-      docs.createIndex("by_date", "date", { unique:false });
-      docs.createIndex("by_person", "personId", { unique:false });
-      docs.createIndex("by_related", ["relatedType","relatedId"], { unique:false });
-
-      meta.put({ key:"createdAt", value: nowISO() });
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-  return _dbPromise;
+:root{
+  --bg:#0b1c2d;
+  --panel:#0f2740;
+  --panel2:#102b47;
+  --txt:#eaf2ff;
+  --muted:#a7b7d4;
+  --line:#214567;
+  --accent:#409cff;
+  --red:#ff5b6e;
+  --green:#29d17d;
+  --blue:#409cff;
+  --shadow: 0 10px 35px rgba(0,0,0,.35);
+  --r:14px;
+  --r2:18px;
+  --pad:14px;
+  --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
 }
 
-async function tx(storeNames, mode, fn){
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const t = db.transaction(storeNames, mode);
-    const stores = {};
-    storeNames.forEach(n => stores[n] = t.objectStore(n));
-    let result;
-    Promise.resolve().then(() => fn(stores)).then(r => { result = r; })
-      .catch(err => reject(err));
-    t.oncomplete = () => resolve(result);
-    t.onerror = () => reject(t.error);
-  });
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  font-family:var(--font);
+  background:linear-gradient(180deg, #081625, #0b1c2d 35%, #061220);
+  color:var(--txt);
 }
 
-function reqToPromise(req){
-  return new Promise((resolve, reject) => {
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+/* ===== TOPO ===== */
+.topbar{
+  position:sticky; top:0; z-index:10;
+  display:flex; justify-content:space-between; align-items:center;
+  padding:12px 14px; gap:12px;
+  background:rgba(11,28,45,.82);
+  border-bottom:1px solid rgba(33,69,103,.6);
+  backdrop-filter: blur(10px);
 }
-function getAll(store){
-  return new Promise((resolve, reject) => {
-    const req = store.getAll();
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error);
-  });
+.brand{display:flex; align-items:center; gap:10px}
+.logo{
+  width:36px; height:36px; border-radius:10px;
+  display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(135deg, #409cff, #6fd1ff);
+  color:#081625; font-weight:1000;
 }
-function getAllFromIndex(index, range){
-  return new Promise((resolve, reject) => {
-    const req = index.getAll(range);
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error);
-  });
-}
-function clearStore(store){
-  return new Promise((resolve, reject) => {
-    const req = store.clear();
-    req.onsuccess = () => resolve(true);
-    req.onerror = () => reject(req.error);
-  });
-}
+.appTitle{font-weight:900; letter-spacing:.2px}
+.appSub{font-size:12px; color:var(--muted)}
 
-function blobToBase64(blob){
-  return new Promise((resolve) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result);
-    r.readAsDataURL(blob);
-  });
+.topActions{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end}
+
+/* ===== TABS ===== */
+.tabs{
+  display:flex; gap:8px; padding:10px 12px;
+  border-bottom:1px solid rgba(33,69,103,.6);
+  background:rgba(7,18,32,.6);
 }
-function base64ToBlob(dataUrl, mime){
-  const parts = dataUrl.split(",");
-  const b64 = parts[1] || "";
-  const bin = atob(b64);
-  const arr = new Uint8Array(bin.length);
-  for (let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
-  return new Blob([arr], {
-    type: mime || (parts[0].match(/data:(.*?);base64/)||[])[1] || "application/octet-stream"
-  });
+.tab{
+  flex:1;
+  border:1px solid rgba(33,69,103,.8);
+  background:rgba(16,43,71,.6);
+  color:var(--txt);
+  padding:10px 10px;
+  border-radius:12px;
+  font-weight:800;
+  cursor:pointer;
+}
+.tab.active{
+  border-color:rgba(64,156,255,.9);
+  box-shadow:0 0 0 2px rgba(64,156,255,.18) inset;
 }
 
-const DB = {
-  uid, nowISO, ymd,
+/* ===== LAYOUT ===== */
+.main{max-width:1120px; margin:0 auto; padding:12px}
+.view{display:none}
+.view.active{display:block}
 
-  async getMeta(key){
-    return tx(["meta"], "readonly", async ({meta}) => {
-      const r = await reqToPromise(meta.get(key));
-      return r?.value ?? null;
-    });
-  },
-  async setMeta(key, value){
-    return tx(["meta"], "readwrite", async ({meta}) => meta.put({key, value}));
-  },
+.row{display:flex; align-items:center}
+.row.end{justify-content:flex-end}
+.row.wrap{flex-wrap:wrap}
+.gap{gap:10px}
 
-  async listPeople(query=""){
-    query = (query||"").trim().toLowerCase();
-    return tx(["people"], "readonly", async ({people}) => {
-      const all = await getAll(people);
-      const filtered = query ? all.filter(p => (p.name||"").toLowerCase().includes(query)) : all;
-      filtered.sort((a,b) => (a.name||"").localeCompare(b.name||""));
-      return filtered;
-    });
-  },
-  async upsertPerson(p){
-    const obj = {
-      id: p.id || uid(),
-      name: (p.name||"").trim(),
-      phone: (p.phone||"").trim(),
-      notes: (p.notes||"").trim(),
-      createdAt: p.createdAt || nowISO(),
-      updatedAt: nowISO(),
-    };
-    return tx(["people"], "readwrite", async ({people}) => {
-      await reqToPromise(people.put(obj));
-      return obj;
-    });
-  },
-  async getPerson(id){
-    return tx(["people"], "readonly", async ({people}) => reqToPromise(people.get(id)));
-  },
-  async deletePerson(id){
-    return tx(["people","tasks","appts","cash","docs"], "readwrite", async ({people,tasks,appts,cash,docs}) => {
-      await reqToPromise(people.delete(id));
-      const [ts, ap, cs, ds] = await Promise.all([getAll(tasks), getAll(appts), getAll(cash), getAll(docs)]);
-      for (const t of ts){ if(t.personId===id){ t.personId=null; t.updatedAt=nowISO(); await reqToPromise(tasks.put(t)); } }
-      for (const a of ap){ if(a.personId===id){ a.personId=null; a.updatedAt=nowISO(); await reqToPromise(appts.put(a)); } }
-      for (const c of cs){ if(c.personId===id){ c.personId=null; c.updatedAt=nowISO(); await reqToPromise(cash.put(c)); } }
-      for (const d of ds){ if(d.personId===id){ d.personId=null; await reqToPromise(docs.put(d)); } }
-    });
-  },
+.muted{color:var(--muted)}
+.smallText{font-size:12px}
+.big{font-size:18px; font-weight:1000}
 
-  async listTasksByDate(date){
-    return tx(["tasks"], "readonly", async ({tasks}) => {
-      const idx = tasks.index("by_date");
-      const items = await getAllFromIndex(idx, IDBKeyRange.only(date));
-      items.sort((a,b) => (a.bucket||"").localeCompare(b.bucket||"") || (a.createdAt||"").localeCompare(b.createdAt||""));
-      return items;
-    });
-  },
-  async upsertTask(t){
-    const obj = {
-      id: t.id || uid(),
-      date: t.date,
-      bucket: t.bucket,
-      text: (t.text||"").trim(),
-      done: !!t.done,
-      personId: t.personId || null,
-      createdAt: t.createdAt || nowISO(),
-      updatedAt: nowISO(),
-    };
-    return tx(["tasks"], "readwrite", async ({tasks}) => {
-      await reqToPromise(tasks.put(obj));
-      return obj;
-    });
-  },
-  async deleteTask(id){
-    return tx(["tasks"], "readwrite", async ({tasks}) => reqToPromise(tasks.delete(id)));
-  },
+/* ===== BOTÕES ===== */
+.btn{
+  border:none; cursor:pointer; font-weight:900;
+  color:#081625; background:var(--accent);
+  padding:10px 12px; border-radius:12px;
+  box-shadow: 0 10px 18px rgba(64,156,255,.18);
+}
+.btn.small{padding:8px 10px; border-radius:11px; font-size:13px}
+.btn.ghost{
+  background:rgba(16,43,71,.55); color:var(--txt);
+  border:1px solid rgba(33,69,103,.8);
+  box-shadow:none;
+}
+.btn.red{background:var(--red)}
+.btn.green{background:var(--green)}
 
-  async listAppts(date){
-    return tx(["appts"], "readonly",
+.iconBtn{
+  width:40px; height:40px; border-radius:12px;
+  border:1px solid rgba(33,69,103,.8);
+  background:rgba(16,43,71,.55); color:var(--txt);
+  cursor:pointer; font-weight:1000;
+}
+
+/* ===== INPUTS ===== */
+.input{
+  width:100%;
+  padding:12px 12px;
+  border-radius:12px;
+  border:1px solid rgba(33,69,103,.85);
+  background:rgba(6,18,32,.55);
+  color:var(--txt);
+  outline:none;
+}
+.input:focus{
+  border-color:rgba(64,156,255,.85);
+  box-shadow:0 0 0 3px rgba(64,156,255,.18)
+}
+
+.field{
+  flex:1; min-width:220px;
+  display:flex; flex-direction:column; gap:6px
+}
+.field span{
+  color:var(--muted); font-size:12px; font-weight:900
+}
+
+/* ===== CARDS ===== */
+.card{
+  background:rgba(15,39,64,.82);
+  border:1px solid rgba(33,69,103,.75);
+  border-radius:var(--r2);
+  padding:var(--pad);
+  box-shadow: var(--shadow);
+}
+.cardHead{
+  display:flex; justify-content:space-between; align-items:flex-start; gap:12px
+}
+.cardTitle{font-weight:1000; letter-spacing:.2px}
+
+.borderRed{box-shadow:0 0 0 1px rgba(255,91,110,.35) inset, var(--shadow)}
+.borderGreen{box-shadow:0 0 0 1px rgba(41,209,125,.35) inset, var(--shadow)}
+.borderBlue{box-shadow:0 0 0 1px rgba(64,156,255,.35) inset, var(--shadow)}
+
+/* ===== LISTAS ===== */
+.list{display:flex; flex-direction:column; gap:10px; margin-top:10px}
+
+.item{
+  display:flex; justify-content:space-between; align-items:center; gap:10px;
+  background:rgba(16,43,71,.55);
+  border:1px solid rgba(33,69,103,.7);
+  border-radius:14px;
+  padding:12px;
+}
+.itemLeft{display:flex; flex-direction:column; gap:4px}
+.itemTitle{font-weight:1000}
+.itemMeta{font-size:12px; color:var(--muted)}
+
+.pills{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.pill{
+  font-size:12px; font-weight:1000;
+  padding:6px 10px; border-radius:999px;
+  border:1px solid rgba(33,69,103,.8);
+  background:rgba(6,18,32,.35);
+  color:var(--txt);
+}
+.pill.red{border-color:rgba(255,91,110,.55); color:rgba(255,91,110,.95)}
+.pill.green{border-color:rgba(41,209,125,.55); color:rgba(41,209,125,.95)}
+.pill.blue{border-color:rgba(64,156,255,.55); color:rgba(64,156,255,.95)}
+.pill.done{opacity:.75; text-decoration:line-through}
+
+/* ===== DIA ===== */
+.daybar{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  margin:12px 0;
+}
+.dayTitle{display:flex; flex-direction:column; align-items:center}
+.chip{
+  border:1px solid rgba(33,69,103,.8);
+  background:rgba(16,43,71,.55);
+  color:var(--txt);
+  padding:10px 12px;
+  border-radius:14px;
+  cursor:pointer;
+  font-weight:1000;
+}
+
+/* ===== HERO ===== */
+.hero{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:12px 0}
+.heroTitle{font-weight:1000; letter-spacing:.2px; color:var(--muted); font-size:12px}
+.heroCol{
+  background:rgba(15,39,64,.55);
+  border:1px solid rgba(33,69,103,.6);
+  border-radius:18px;
+  padding:12px
+}
+.heroBox{
+  margin-top:8px;
+  background:rgba(16,43,71,.55);
+  border:1px dashed rgba(64,156,255,.45);
+  border-radius:16px;
+  padding:12px;
+  min-height:62px;
+}
+
+/* ===== GRID ===== */
+.grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:12px 0}
+
+/* ===== STATUS / FOCO ===== */
+.statusBar{margin: 8px 0 12px}
+.statusOk{
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(41,209,125,.55);
+  background: rgba(41,209,125,.10);
+  font-weight: 1000;
+}
+
+/* Modo foco: reduz estímulos */
+body.focusMode .grid3,
+body.focusMode #apptList,
+body.focusMode .tabs,
+body.focusMode .footer{
+  opacity:.35;
+  filter: blur(.2px);
+  pointer-events:none;
+}
+body.focusMode #nowBox{
+  border:1px solid rgba(41,209,125,.7)!important;
+  box-shadow:0 0 0 3px rgba(41,209,125,.18) inset, var(--shadow);
+}
+body.focusMode #nextBox{opacity:.65}
+body.focusMode .topbar{
+  box-shadow:0 0 0 2px rgba(41,209,125,.12) inset;
+}
+
+/* ===== MODAIS ===== */
+.modal{
+  position:fixed; inset:0; display:none;
+  align-items:center; justify-content:center;
+  background:rgba(0,0,0,.55);
+  z-index:50;
+  padding:12px;
+}
+.modal[aria-hidden="false"]{display:flex}
+.modalCard{
+  width:min(720px, 100%);
+  background:rgba(15,39,64,.96);
+  border:1px solid rgba(33,69,103,.85);
+  border-radius:18px;
+  box-shadow: var(--shadow);
+  padding:14px;
+}
+.modalHead{
+  display:flex; justify-content:space-between; align-items:flex-start;
+  gap:12px; margin-bottom:10px
+}
+.modalTitle{font-weight:1000}
+
+.quickGrid{display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-top:8px}
+.quickBtn{
+  text-align:left; padding:14px; border-radius:16px;
+  border:1px solid rgba(33,69,103,.85);
+  background:rgba(16,43,71,.55);
+  color:var(--txt);
+  cursor:pointer; font-weight:1000;
+}
+.quickBtn.red{border-color:rgba(255,91,110,.55)}
+.quickBtn.green{border-color:rgba(41,209,125,.55)}
+.quickBtn.blue{border-color:rgba(64,156,255,.55)}
+
+.help{
+  margin:0; padding-left:18px;
+  display:flex; flex-direction:column; gap:10px
+}
+
+/* ===== FOOTER ===== */
+.footer{
+  padding:14px; text-align:center
+}
+
+/* ===== RESPONSIVO ===== */
+@media (max-width: 900px){
+  .grid3{grid-template-columns:1fr}
+  .hero{grid-template-columns:1fr}
+  .topActions{gap:6px}
+  .tab{padding:10px 6px}
+}
